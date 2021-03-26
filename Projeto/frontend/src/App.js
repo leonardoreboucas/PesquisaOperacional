@@ -58,9 +58,20 @@ const columnsEstimates = [
     width: 100,
   },
   {
-    field: 'paramCount',
-    headerName: 'Param usage',
+    field: 'countMemory',
+    headerName: 'Memory used',
     type: 'number',
+    width: 150,
+  },
+  {
+    field: 'countVcpu',
+    headerName: 'VCpu used',
+    width: 150,
+  }
+  ,
+  {
+    field: 'countStorage',
+    headerName: 'Storage used',
     width: 150,
   }
 ];
@@ -80,7 +91,11 @@ export default function DataTable() {
   const [estimates, setEstimates] = useState([])
   const [total, setTotal] = useState()
   const [totalCalculated, setTotalCalculated] = useState()
+  const [totalMemory, setTotalMemory] = useState()
+  const [totalVcpu, setTotalVcpu] = useState()
+  const [totalStorage, setTotalStorage] = useState()
   const [showEstimates, setShowEstimates] = useState(false)
+  const [error, setError] = useState()
   const defaultData = {
     id:0,
     memory:"",
@@ -124,27 +139,51 @@ export default function DataTable() {
     setMessage({text:"Estimative requested",severity:"success"})
 
     setEstimates([])
+    setTotalCalculated(0)
+    setTotalMemory(0)
+    setTotalVcpu(0)
+    setTotalStorage(0)
+    setError()
     setShowEstimates(true)
+
 
     const response = await api.put("solve", {"required":requirements, "mainParam":item}).catch(e=>{
       console.log(e)
     })
 
+    if (response && response.data.list.length==0){
+      setError(true)
+      return
+    }
+
     let data = []
     response.data.list.forEach(itemNow=>{
       let row = itemNow.instance_found
       row.id = row.sku
-      row.paramCount = itemNow.paramCount / itemNow.instance_found[item]
+      //row.paramCount = itemNow.paramCount / itemNow.instance_found[item]
+      row.countMemory = itemNow.countMemory
+      row.countVcpu = itemNow.countVcpu
+      row.countStorage = itemNow.countStorage
       row.requiredId = itemNow.instance_required.id
       data.push(row)
     })
     setTotal(response.data.total)
 
     let totalCalculated = 0
+    let totalMemory = 0
+    let totalVcpu = 0
+    let totalStorage = 0
+    
     data.forEach(itemNow=>{
-      totalCalculated += itemNow.paramCount * itemNow.price
+      totalCalculated += itemNow.price
+      totalMemory += itemNow.memory
+      totalVcpu += itemNow.vcpu
+      totalStorage += itemNow.storage
     })
     setTotalCalculated(totalCalculated)
+    setTotalMemory(totalMemory)
+    setTotalVcpu(totalVcpu)
+    setTotalStorage(totalStorage)
     setEstimates(data)
     setOpen(false)
   };
@@ -279,16 +318,19 @@ export default function DataTable() {
           <Grid item md={7}>
             <Card>
               <CardContent>
-                {(showEstimates)&&(
-                  (!estimates.length)?
+                {(showEstimates && !error)&&(
+                  (!estimates.length )?
                     <LinearProgress />
                   :
                     <div style={{ height: 800, width: '100%' }}>
                       <DataGrid rows={(estimates)?estimates:[]} columns={columnsEstimates} pageSize={50} />
-                      <Typography>Objective Value: {total} / Total Calculated: {totalCalculated}</Typography>
+                      <Typography>Objective Value: {total} / Total Calculated: {totalCalculated} / Total Memory: {totalMemory} / Total VCpu: {totalVcpu} / Total Storage: {totalStorage}</Typography>
                     </div>
                   )
                 }
+                {error&&(
+                  <Typography>No result found</Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>

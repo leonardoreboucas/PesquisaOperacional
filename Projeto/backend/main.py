@@ -4,6 +4,7 @@ import boto3
 import json
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+import math
 
 app = FastAPI()
 origins = ["*"]
@@ -21,44 +22,54 @@ class Item(BaseModel):
     mainParam: str
 
 def get_prices_from_aws():
-    client = boto3.client('pricing')
-    first = 1
-    response = {}
-    aws_prices = []
-    while (first or "NextToken" in response):
-        first = 0
-        response = client.get_products(
-            ServiceCode='AmazonEC2',
-            Filters=[
-                {
-                    'Type': 'TERM_MATCH',
-                    'Field': 'productFamily',
-                    'Value': 'Compute Instance'
-                },
-                {
-                    'Type': 'TERM_MATCH',
-                    'Field': 'operatingSystem',
-                    'Value': 'Linux'
-                },
-                #{
-                #    'Type': 'TERM_MATCH',
-                #    'Field': 'vcpu',
-                #    'Value': '128'
-                #},
-                {
-                    'Type': 'TERM_MATCH',
-                    'Field': 'location',
-                    'Value': 'South America (Sao Paulo)'
-                }
-            ],
-            FormatVersion='aws_v1',
-            NextToken=response['NextToken'] if "NextToken" in response else ''
-        )
+    f=open("aws.json", "r")
+    contents = f.read()
+    """
+    if contents == '':
+        f = open("aws.json","w+")
+        client = boto3.client('pricing')
+        first = 1
+        response = {}
+        aws_prices = []
+        while (first or "NextToken" in response):
+            first = 0
+            response = client.get_products(
+                ServiceCode='AmazonEC2',
+                Filters=[
+                    {
+                        'Type': 'TERM_MATCH',
+                        'Field': 'productFamily',
+                        'Value': 'Compute Instance'
+                    },
+                    {
+                        'Type': 'TERM_MATCH',
+                        'Field': 'operatingSystem',
+                        'Value': 'Linux'
+                    },
+                    #{
+                    #    'Type': 'TERM_MATCH',
+                    #    'Field': 'vcpu',
+                    #    'Value': '128'
+                    #},
+                    {
+                        'Type': 'TERM_MATCH',
+                        'Field': 'location',
+                        'Value': 'South America (Sao Paulo)'
+                    }
+                ],
+                FormatVersion='aws_v1',
+                NextToken=response['NextToken'] if "NextToken" in response else ''
+            )
 
-        for i in response['PriceList']:
-            x = json.loads(i)
-            aws_prices.append(x)
-    return aws_prices
+            for i in response['PriceList']:
+                x = json.loads(i)
+                aws_prices.append(x)
+        f.write(json.dumps(aws_prices))
+        contents = json.dumps(aws_prices)
+    """
+    content = json.loads(contents)
+    f.close()
+    return content
 
 
 
@@ -120,44 +131,44 @@ def solution(instances_required, instances_available, param):
 
     Pi = []
     for i in range(0,M):
-        Pi.append(float(instances_required[i][param]))
+        Pi.append([float(instances_required[i]['memory']),float(instances_required[i]['vcpu']),float(instances_required[i]['storage'])])
 
     Sj = []
     for j in range(0,N):
-        Sj.append(float(instances_available[j][param]))
+        Sj.append([float(instances_available[j]['memory']),float(instances_available[j]['vcpu']),float(instances_available[j]['storage'])])
 
     #Variáveis de Decisão
-    xij = [[solver.NumVar(0,min(Sj[j],Pi[i]),'X%d%d'%(i,j)) for j in range(0,N)] for i in range(0,M)]
+    yij = [[[solver.NumVar(0,min(Pi[i][0],Sj[j][0]),'Y%d%d0'%(i,j)), solver.NumVar(0,min(Pi[i][1],Sj[j][1]),'Y%d%d1'%(i,j)), solver.NumVar(0,min(Pi[i][2],Sj[j][2]),'Y%d%d2'%(i,j))] for j in range(0,N)] for i in range(0,M)]
 
     #Restricoes
     for i in range(0,M):
-        ct = solver.Constraint(Pi[i],Pi[i],'ct i=%d'%(i))
+        cty0 = solver.Constraint(Pi[i][0],Pi[i][0],'cty0 i=%d'%(i))
+        cty1 = solver.Constraint(Pi[i][1],Pi[i][1],'cty1 i=%d'%(i))
+        cty2 = solver.Constraint(Pi[i][2],Pi[i][2],'cty2 i=%d'%(i))
         for j in range(0,N):
-            ct.SetCoefficient(xij[i][j],1)
-
-    #for j in range(0,N):
-    #    ct = solver.Constraint(Sj[j],Sj[j], 'ct j=%d'%(j))
-    #    for i in range(0,M):
-    #        ct.SetCoefficient(xij[i][j],1)
+            if Pi[i][0] <= Sj[j][0] and Pi[i][1] <= Sj[j][1] and Pi[i][2] <= Sj[j][2]:
+                cty0.SetCoefficient(yij[i][j][0],1)
+                cty1.SetCoefficient(yij[i][j][1],1)
+                cty2.SetCoefficient(yij[i][j][2],1)
 
     #Função de Objetivo
 
     objective = solver.Objective()
     for i in range(0, M):
         for j in range(0, N):
-            objective.SetCoefficient(xij[i][j], Aij[i][j])
+            objective.SetCoefficient(yij[i][j][0], Aij[i][j])
+            objective.SetCoefficient(yij[i][j][1], Aij[i][j])
+            objective.SetCoefficient(yij[i][j][2], Aij[i][j])
 
     objective.SetMinimization()
 
     solver.Solve()
 
-    if objective.Value() > 0:
-        result = []
-        for i in range(0,M):
-            for j in range(0,N):
-                if xij[i][j].solution_value() > 0:
-                    result.append({"id":instances_available[j]["sku"],"instance_required":instances_required[i], "instance_found":instances_available[j], "paramCount": xij[i][j].solution_value()})
-
-        return {"list":result, "total":objective.Value()}
-    else:
-        return {"error":"no solution found"}
+    result = []
+    for i in range(0,M):
+        for j in range(0,N):
+            #print(yij[i][j][0].solution_value())
+            if  (Pi[i][0]==0 or yij[i][j][0].solution_value() > 0) and (Pi[i][1]==0 or yij[i][j][1].solution_value() > 0) and (Pi[i][2]==0 or yij[i][j][2].solution_value() > 0):
+                result.append({"id":instances_available[j]["sku"],"instance_required":instances_required[i], "instance_found":instances_available[j], "countMemory": yij[i][j][0].solution_value(),"countVcpu": yij[i][j][1].solution_value(),"countStorage": yij[i][j][2].solution_value()})
+            
+    return {"list":result, "total":objective.Value()}
