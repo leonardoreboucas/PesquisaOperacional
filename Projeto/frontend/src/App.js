@@ -129,12 +129,6 @@ export default function DataTable() {
       return false
     }
 
-    if (!item){
-      setOpen(true)
-      setMessage({text:"Select the most important param",severity:"error"})
-      return false
-    }
-
     setOpen(true)
     setMessage({text:"Estimative requested",severity:"success"})
 
@@ -293,23 +287,6 @@ export default function DataTable() {
         
         
           <Grid item md={1}>
-            <Grid container justify = "center">
-              <FormControl className={classes.formControl}>
-                <InputLabel id="demo-simple-select-outlined-label">Most Important</InputLabel>
-                <Select
-                  labelId="demo-simple-select-outlined-label"
-                  id="demo-simple-select-outlined"
-                  value={item}
-                  onChange={handleChangeSelect}
-                  label="Item"
-                >
-                  <MenuItem value="memory">Memory</MenuItem>
-                  <MenuItem value="vcpu">vCPU</MenuItem>
-                  <MenuItem value="storage">Storage</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
             <Grid container justify = "center">
               <Box mx={3}><Button variant="contained" color="primary" onClick={()=>{handleEstimates()}}>Estimate <ArrowForwardIcon /></Button></Box>
             </Grid>

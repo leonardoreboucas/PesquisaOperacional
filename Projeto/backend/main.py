@@ -19,8 +19,7 @@ app.add_middleware(
 
 class Item(BaseModel):
     required: list
-    mainParam: str
-
+    
 def get_prices_from_aws():
     f=open("aws.json", "r")
     contents = f.read()
@@ -110,11 +109,10 @@ def read_item(item_id: int, q: Optional[str] = None):
 def solve(item: Item):
     required=item.required
     available = read_prices()
-    param = item.mainParam
-    return solution(required, available, param)
+    return solution(required, available)
 
 
-def solution(instances_required, instances_available, param):
+def solution(instances_required, instances_available):
     from ortools.linear_solver import pywraplp
     solver = pywraplp.Solver('simple_lp_program', pywraplp.Solver.GLOP_LINEAR_PROGRAMMING)
 
